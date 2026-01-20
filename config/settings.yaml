@@ -1,0 +1,2 @@
+base_url: "https://api-contract.weex.com"
+poll_interval_sec: 30
