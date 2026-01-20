@@ -1,0 +1,6 @@
+requests
+python-dotenv
+pyyaml
+pydantic
+openai 
+load_dotenv 
