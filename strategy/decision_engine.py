@@ -3,7 +3,7 @@ from utils.logger import get_logger
 
 logger = get_logger("DECISION_ENGINE")
 
-def decide_trade(market_snapshot: dict, account_state: dict) -> dict:
+def decide_trade(market_snapshot: dict, account_state: dict, position: dict | None = None, constraints: dict | None = None) -> dict:
     """
     Orchestrates the AI decision process.
     1. Prepares inputs from market and account state.
@@ -16,7 +16,9 @@ def decide_trade(market_snapshot: dict, account_state: dict) -> dict:
     # Prepare enriched context for AI
     context = {
         "market": market_snapshot,
-        "account": account_state
+        "account": account_state,
+        "position": position or {},
+        "constraints": constraints or {},
     }
 
     logger.info(f"Requesting AI decision for {symbol}...")

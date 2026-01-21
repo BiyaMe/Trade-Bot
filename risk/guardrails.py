@@ -16,9 +16,7 @@ def apply_guardrails(decision, account_state):
         decision["signal"] = "HOLD"
 
     return decision
-from config.settings import MAX_LEVERAGE, MIN_CONFIDENCE, MAX_CONFIDENCE
-
-from config.settings import MAX_LEVERAGE, ALLOWED_SYMBOLS
+from config.settings import MAX_LEVERAGE, ALLOWED_SYMBOLS, MAX_RISK_PER_TRADE_PCT, MIN_CONFIDENCE, MAX_CONFIDENCE
 
 def check_trade_allowed(decision: dict, symbol: str, account_state: dict):
     """
@@ -29,6 +27,9 @@ def check_trade_allowed(decision: dict, symbol: str, account_state: dict):
     
     # 1. Allow HOLD always
     if action == "HOLD":
+        return True, "OK"
+
+    if action == "CLOSE":
         return True, "OK"
 
     # 2. Symbol Validation
@@ -42,14 +43,21 @@ def check_trade_allowed(decision: dict, symbol: str, account_state: dict):
         return False, f"Leverage {leverage} exceeds limit {MAX_LEVERAGE}"
 
     # 4. Position Size / Balance Validation
-    # Assuming 'size' is a percentage of equity (e.g. 0.05 for 5%)
+    # Size is quantity; use price to compute notional.
     size = decision.get("size", 0.0)
     if size <= 0:
         return False, "Position size must be positive"
+
+    price = decision.get("price", 0.0)
+    if price <= 0:
+        return False, "Missing price for size validation"
+    notional = size * price
+    equity = account_state.get("equity", 0)
+    if equity > 0 and notional > (equity * MAX_RISK_PER_TRADE_PCT):
+        return False, f"Notional {notional} exceeds max risk {MAX_RISK_PER_TRADE_PCT:.2%}"
     
     # Check if we have enough balance (simplified check)
-    equity = account_state.get("equity", 0)
-    cost = (equity * size) / leverage
+    cost = notional / leverage
     balance = account_state.get("balance", 0)
 
     if cost > balance:

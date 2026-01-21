@@ -44,6 +44,7 @@ This is an advanced AI-powered trading bot designed for the WEEX exchange. It le
     WEEX_API_KEY=your_api_key
     WEEX_SECRET_KEY=your_secret_key
     WEEX_PASSPHRASE=your_passphrase
+    OPENAI_API_KEY=your_openai_api_key
     # Add other necessary env vars
     ```
 
@@ -56,6 +57,20 @@ To start the trading bot:
 
 ```bash
 python main.py
+```
+
+## Docker
+
+Build the image:
+
+```bash
+docker build -t trade-bot .
+```
+
+Run with environment variables (recommended to use an env file):
+
+```bash
+docker run --rm --env-file .env trade-bot
 ```
 
 To run the verification suite:

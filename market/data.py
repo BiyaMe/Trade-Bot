@@ -28,18 +28,17 @@ def get_market_snapshot(symbol: str) -> dict:
     """
     try:
         # 1. Get Candles (e.g. 5m candles)
-        # Endpoint: /capi/v2/market/kline?symbol=...&limit=100&interval=5m
-        response = client.get("/capi/v2/market/kline", params={
-            "symbol": symbol,
-            "interval": "5m",
-            "limit": "50"
-        })
-        
-        if response.get("code") != "00000":
-             logger.error(f"Kline fetch failed for {symbol}")
-             return {}
+        # Endpoint: /capi/v2/market/candles?symbol=...&granularity=5m
+        response = client.get_candles(symbol=symbol, granularity="5m", limit=50)
 
-        candles = response.get("data", [])
+        if isinstance(response, list):
+            candles = response
+        else:
+            if response.get("code") != "00000":
+                 logger.error(f"Kline fetch failed for {symbol}")
+                 return {}
+            candles = response.get("data", [])
+
         if not candles:
             return {}
 
@@ -57,10 +56,16 @@ def get_market_snapshot(symbol: str) -> dict:
         ema = calculate_ema(closes, 20)
         
         # Funding Rate
-        funding_resp = client.get("/capi/v2/market/funding-rate", params={"symbol": symbol})
+        funding_resp = client.get_current_fund_rate(symbol=symbol)
         funding = 0.0
-        if funding_resp.get("code") == "00000":
-            funding = float(funding_resp["data"]["fundingRate"])
+        if isinstance(funding_resp, list) and funding_resp:
+            funding = float(funding_resp[0].get("fundingRate", 0.0))
+        elif isinstance(funding_resp, dict) and funding_resp.get("code") == "00000":
+            data = funding_resp.get("data", {})
+            if isinstance(data, list) and data:
+                funding = float(data[0].get("fundingRate", 0.0))
+            elif isinstance(data, dict) and "fundingRate" in data:
+                funding = float(data.get("fundingRate", 0.0))
 
         return {
             "symbol": symbol,

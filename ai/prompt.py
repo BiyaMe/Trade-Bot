@@ -1,4 +1,4 @@
-from config.settings import ALLOWED_SYMBOLS, MAX_LEVERAGE
+from config.settings import ALLOWED_SYMBOLS, MAX_LEVERAGE, MAX_RISK_PER_TRADE_PCT, TRADE_NOTIONAL_USDT, TAKE_PROFIT_USDT, STOP_LOSS_USDT
 
 def build_prompt(context: dict) -> str:
     """
@@ -7,12 +7,22 @@ def build_prompt(context: dict) -> str:
     
     market = context.get("market", {})
     account = context.get("account", {})
+    position = context.get("position", {})
+    constraints = context.get("constraints", {})
 
     # Format market data into a readable string
     market_text = "\n".join([f"- {k.upper()}: {v}" for k, v in market.items()])
 
     # Format account data
     account_text = f"Equity: {account.get('equity', 0)}, Balance: {account.get('balance', 0)}"
+    position_text = "None"
+    if position:
+        position_text = (
+            f"Side: {position.get('side')}, Entry: {position.get('entry_price')}, "
+            f"Size: {position.get('size')}, UnrealizedPnL: {position.get('pnl_usdt')}"
+        )
+    allowed_actions = constraints.get("allowed_actions", ["SELL", "HOLD"])
+    required_size = constraints.get("required_size")
 
     return f"""🔒 SYSTEM PROMPT — PROFIT-ORIENTED AI TRADER (WEEX COMPETITION)
 
@@ -39,7 +49,7 @@ INPUTS YOU WILL RECEIVE:
 
 OUTPUT RULES:
 - Respond ONLY in valid JSON.
-- Choose exactly one action: BUY, SELL, HOLD.
+- Choose exactly one action: {', '.join(allowed_actions)}.
 - Explain reasoning concisely.
 - Do NOT hallucinate prices or indicators.
 
@@ -52,14 +62,18 @@ Every HOLD preserves optionality.
 
 ⚠️ HARD SAFETY CONSTRAINTS
 - Max Leverage: {MAX_LEVERAGE}x
+- Max Position Size: {MAX_RISK_PER_TRADE_PCT:.2%} of equity
+- Trade Notional: {TRADE_NOTIONAL_USDT} USDT per entry
+- Take Profit: +{TAKE_PROFIT_USDT} USDT
+- Stop Loss: -{STOP_LOSS_USDT} USDT
 - Strict JSON output
 
 📤 STRICT OUTPUT FORMAT (REQUIRED)
 {{
-  "action": "BUY | SELL | HOLD",
+  "action": "{' | '.join(allowed_actions)}",
   "confidence": 0.0,
   "leverage": 1,
-  "size": 0.05,
+  "size": {required_size if required_size is not None else 0.0},
   "reason": "Clear, specific explanation suitable for permanent AI logs"
 }}
 
@@ -69,4 +83,13 @@ CURRENT MARKET DATA:
 
 ACCOUNT STATUS:
 {account_text}
+
+CURRENT POSITION:
+{position_text}
+
+ENTRY/EXIT RULES:
+- If there is no position, only SELL (short) or HOLD are allowed.
+- If there is an open short position, only CLOSE or HOLD are allowed.
+- If unrealized PnL >= +{TAKE_PROFIT_USDT} or <= -{STOP_LOSS_USDT}, you MUST return CLOSE.
+- Use the provided size value exactly for any SELL or CLOSE action.
 """

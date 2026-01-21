@@ -64,6 +64,46 @@ class WeexClient:
         response.raise_for_status()
         return response.json()
 
+    # ---- Market endpoints ----
+    def get_candles(self, symbol, granularity="5m", limit=50, price_type=None):
+        params = {"symbol": symbol, "granularity": granularity, "limit": limit}
+        if price_type:
+            params["priceType"] = price_type
+        return self.get("/capi/v2/market/candles", params=params)
+
+    def get_history_candles(self, symbol, granularity="5m", start_time=None, end_time=None, limit=100, price_type=None):
+        params = {"symbol": symbol, "granularity": granularity, "limit": limit}
+        if start_time:
+            params["startTime"] = start_time
+        if end_time:
+            params["endTime"] = end_time
+        if price_type:
+            params["priceType"] = price_type
+        return self.get("/capi/v2/market/historyCandles", params=params)
+
+    def get_current_fund_rate(self, symbol=None):
+        params = {"symbol": symbol} if symbol else None
+        return self.get("/capi/v2/market/currentFundRate", params=params)
+
+    def get_history_fund_rate(self, symbol, limit=10):
+        params = {"symbol": symbol, "limit": limit}
+        return self.get("/capi/v2/market/getHistoryFundRate", params=params)
+
+    # ---- Account endpoints ----
+    def get_accounts(self):
+        return self.get("/capi/v2/account/getAccounts", params=None, private=True)
+
+    def change_leverage(self, symbol, leverage):
+        payload = {"symbol": symbol, "leverage": str(leverage)}
+        return self.post("/capi/v2/account/leverage", payload, private=True)
+
+    # ---- Trade endpoints ----
+    def place_order(self, payload):
+        return self.post("/capi/v2/order/placeOrder", payload, private=True)
+
+    def upload_ai_log_endpoint(self, payload):
+        return self.post("/capi/v2/order/uploadAiLog", payload, private=True)
+
     @classmethod
     def from_env(cls):
         import os

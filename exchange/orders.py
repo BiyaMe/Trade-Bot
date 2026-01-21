@@ -6,7 +6,7 @@ logger = get_logger("EXCHANGE")
 # Global client instance (could be singleton or passed in)
 client = WeexClient.from_env()
 
-def place_order(symbol: str, side: str, size: float, leverage: int) -> str:
+def place_order(symbol: str, side: str, size: float, leverage: int, take_profit: float | None = None, stop_loss: float | None = None) -> str:
     """
     Executes a market order on WEEX.
     Returns: orderId (str) or None if failed.
@@ -17,8 +17,6 @@ def place_order(symbol: str, side: str, size: float, leverage: int) -> str:
     logger.info(f"Placing {side} order for {symbol}: size={size}, lev={leverage}x")
 
     try:
-        # 1. Set leverage first (CRITICAL)
-        set_leverage(symbol, leverage)
 
         # 2. Place Market Order
         # WEEX API: /capi/v2/order/placeOrder
@@ -35,6 +33,10 @@ def place_order(symbol: str, side: str, size: float, leverage: int) -> str:
         # If not, we might fail. Given WeexClient is generic, we should map here if we knew codes.
         # Assuming "side": "BUY" works or Weex accepts standard strings.
         
+        if side == "SELL" and (take_profit is None or stop_loss is None):
+            logger.error("Refusing to place entry order without TP/SL.")
+            return None
+
         payload = {
             "symbol": symbol,
             "side": side, # "BUY" or "SELL"
@@ -42,21 +44,33 @@ def place_order(symbol: str, side: str, size: float, leverage: int) -> str:
             "quantity": str(size), # Usually quantity/size
             "leverage": str(leverage)
         }
+
+        if take_profit is not None:
+            payload["presetTakeProfitPrice"] = str(take_profit)
+        if stop_loss is not None:
+            payload["presetStopLossPrice"] = str(stop_loss)
         
         # Double check types
         if not isinstance(size, (int, float)) or size <= 0:
              logger.error(f"Invalid size: {size}")
              return None
 
-        response = client.post("/capi/v2/order/placeOrder", payload)
-        
-        if response.get("code") == "00000":
-            order_id = response.get("data", {}).get("orderId")
-            logger.info(f"Order executed: {order_id}")
-            return order_id
-        else:
+        response = client.place_order(payload)
+
+        if isinstance(response, dict):
+            if response.get("code") == "00000":
+                order_id = response.get("data", {}).get("orderId") or response.get("data", {}).get("order_id")
+                logger.info(f"Order executed: {order_id}")
+                return order_id
+            if "order_id" in response:
+                order_id = response.get("order_id")
+                logger.info(f"Order executed: {order_id}")
+                return order_id
             logger.error(f"Order failed: {response}")
             return None
+
+        logger.error(f"Unexpected order response: {response}")
+        return None
 
     except Exception as e:
         logger.error(f"Execution exception for {symbol}: {e}")
@@ -66,10 +80,7 @@ def set_leverage(symbol: str, leverage: int):
     try:
         # Check config/cache if leverage needs update?
         # For safety, we set it every time or catch errors
-        client.post("/capi/v2/account/leverage", {
-            "symbol": symbol,
-            "leverage": str(leverage)
-        })
+        client.change_leverage(symbol, leverage)
     except Exception as e:
         logger.warning(f"Failed to set leverage: {e}")
 
